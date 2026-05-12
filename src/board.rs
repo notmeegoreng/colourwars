@@ -33,11 +33,13 @@ impl Cell {
             self.val = id;
             false
         } else {
-            self.val &= 0b11;
-            self.val += 1;
-            let c = self.val;
-            self.val |= id;
-            c == 0b11
+            let c = self.val & 0b11;
+            if c == 0b11 {
+                // already popping, ignore
+                return false;
+            }
+            self.val = (c + 1) | id;
+            c == 0b10
         }
     }
 
@@ -56,52 +58,53 @@ impl Cell {
 }
 
 #[derive(Debug, Clone)]
-pub struct State<const R: usize, const N: usize> {
+pub struct Board<const R: usize, const N: usize> {
     // row major order
     pub board: [Cell; N],
 }
 
-impl<const R: usize, const N: usize> Default for State<R, N> {
+impl<const R: usize, const N: usize> Default for Board<R, N> {
     fn default() -> Self {
-        State {
+        Board {
             board: [Cell::default(); N],
         }
     }
 }
 
-impl<const R: usize, const N: usize> State<R, N> {
+impl<const R: usize, const N: usize> Board<R, N> {
     fn inc(&mut self, idx: usize, id: u8, v: &mut Vec<usize>) {
         if self.board[idx].inc(id) {
-            println!("pop at {}", idx);
-            self.board[idx].clear();
-            let i = idx % R;
-            if i != 0 {
-                v.push(idx - 1);
-            }
-            if idx >= R {
-                v.push(idx - R);
-            }
-            if i != R - 1 {
-                v.push(idx + 1);
-            }
-            if idx + R < N {
-                v.push(idx + R)
-            }
+            v.push(idx);
         }
     }
 
     pub fn inc_all(&mut self, idx: usize, id: u8) {
-        let mut c: Vec<usize> = vec![idx];
-        let mut n: Vec<usize> = vec![];
+        // next to pop
+        let mut c: Vec<usize> = vec![];
+        self.inc(idx, id, &mut c);
         while !c.is_empty() {
+            let mut n = vec![];
             for idx in c {
-                self.inc(idx, id, &mut n);
+                self.board[idx].clear();
+                let i = idx % R;
+                if i != 0 {
+                    self.inc(idx - 1, id, &mut n);
+                }
+                if idx >= R {
+                    self.inc(idx - R, id, &mut n);
+                }
+                if i != R - 1 {
+                    self.inc(idx + 1, id, &mut n);
+                }
+                if idx + R < N {
+                    self.inc(idx + R, id, &mut n)
+                }
             }
             c = n;
-            n = vec![];
         }
     }
 
+    // self is not needed, but having it be a method is easier to use
     pub fn index(&self, i: usize, j: usize) -> usize {
         i + j * R
     }
